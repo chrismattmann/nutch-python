@@ -1,0 +1,11 @@
+/.project
+/.pydevproject
+/nutch.egg-info
+/build
+/dist
+*.log
+/.settings/
+/nutch/*.pyc
+/nutch/*/*.pyc
+.DS_Store
+/setup.cfg
