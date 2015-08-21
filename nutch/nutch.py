@@ -22,7 +22,7 @@ Most commands return results in JSON format by default, or plain text.
 
 To control Nutch, use:
 
--- from nutch import Nutch
+-- from nutch.nutch import Nutch
 -- nt = Nutch(crawlId,                           # name your crawl
               confId='default',                  # pick a known config. file
               urlDir='url/',                     # directory containing the seed URL list
