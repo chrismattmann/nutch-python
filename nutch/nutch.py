@@ -56,105 +56,72 @@ To see the status of jobs, use:
 
 """
 
-import sys, os, time, getopt, json
+import getopt
+from getpass import getuser
+import json
+import sys
+import time
+from datetime import datetime
 import requests
 
-ServerHost = "localhost"
-Port = "8081"
-ServerEndpoint = 'http://' + ServerHost + ':' + Port
+DefaultServerHost = "localhost"
+DefaultPort = "8081"
+DefaultServerEndpoint = 'http://' + DefaultServerHost + ':' + DefaultPort
 DefaultConfig = 'default'
+
 LegalJobs = ['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB', 'CRAWL']
+RequestVerbs = {'get': requests.get, 'put': requests.put, 'post': requests.post, 'delete': requests.delete}
 
-TextResponseHeader = {'Accept': 'text/plain'}
-JsonResponseHeader = {'Accept': 'application/json'}
+TextAcceptHeader = {'Accept': 'text/plain'}
+JsonAcceptHeader = {'Accept': 'application/json'}
 
-Verbose = 0
-Mock = 0
+class NutchException(Exception):
+    pass
+
+# TODO: Replace with Python logger
+Verbose = True
 def echo2(*s): sys.stderr.write('nutch.py: ' + ' '.join(map(str, s)) + '\n')
 def warn(*s):  echo2('Warn:', *s)
 def die(*s):   echo2('Error:',  *s); echo2(USAGE); sys.exit()
 
+def defaultCrawlId():
+    """
+    Provide a reasonable default crawl name using the user name and date
+    """
 
-class Nutch:
-    def __init__(self, crawlId, confId=DefaultConfig, urlDir='url/', serverEndpoint=ServerEndpoint,
-                 **args):
-        '''Nutch class to hold various crawl & configuraton state and methods to call the REST API.
+    now = datetime.now()
+    user = getuser()
+    return '_'.join(('crawl', user, now.isoformat()))
 
-Provides functions:
-    server - getServerStatus, stopServer
-    config - get list of configurations, get config. dict, get an individual config. parameter,
-             and create a new named configuration.
-    job - get list of running jobs, get job metadata, stop/abort a job by id, and create a new job
 
-To start a crawl job, use:
-    jobCreate - or use the methods inject, generate, fetch, parse, updatedb in that order.
+class Job:
+    """
+    Representation of a running Nutch job, use JobClient to get a list of running jobs or to create one
+    """
 
-To run a crawl in one method, use:
--- nt = Nutch(crawlId, configId, urlDir, **args)
--- response, status = nt.crawl(**args)
+    def __init__(self, jid, serverEndpoint=DefaultServerEndpoint):
+        self.id = jid
+        self.serverEndpoint = serverEndpoint
 
-Methods return a tuple of two items, the response content (JSON or text) and the response status.
-        '''
-        self.crawlId = crawlId                  # id for this crawl
-        self.confId = confId                    # a named configuration (XML) file
-        self.urlDir = urlDir                    # directory containing the URL seed list ??
-        self.serverEndpoint = serverEndpoint    # server endpoint as host:port
-        self.parameters = {}
-        self.parameters['crawlId'] = crawlId
-        if 'url_dir' not in args: args['url_dir'] = urlDir
-        self.parameters['confId'] = confId
-        self.parameters['args'] = args     # additional config. args as a dictionary
+    def info(self):
+        """Get current information about this job"""
 
-    def getServerStatus(self):
-        return callServer('get', self.serverEndpoint + '/admin')
-    def stopServer(self):
-        return callServer('post', self.serverEndpoint + '/admin/stop', headers=TextResponseHeader)
+        # need to unpack this for some reason...
+        return callServer('get', self.serverEndpoint + '/job/' + self.id)[0]
 
-    def configGetList(self):     return Config().getList()
-    def configGetInfo(self, id): return Config(id).getInfo()
-    def configGetParameter(self, id, parameterId): return Config(id).getParameter(parameterId)
+    def stop(self):
+        return callServer('get', self.serverEndpoint+'/job/%s/stop' % self.id)
 
-    def configCreate(self, id, config, **args): return Config(id).create(config, **args)
-    
-    def jobGetList(self):     return Job().getList()
-    def jobGetInfo(self, id): return Job(id).getInfo()
-    def jobStop(self, id):    return Job(id).stop()
-    def jobAbort(self, id):   return Job(id).abort()
+    def abort(self):
+        return callServer('get', self.serverEndpoint+'/job/%s/abort' % self.id)
 
-    def jobCreate(self, command, **args):
-        params = self.parameters            # top-level params dict from Nutch object
-        params['args'].update(args)         # add extra args in args sub-dictionary
-        echo2('Creating', command.upper(), 'job for %s, %s.' % (self.crawlId, self.confId))
-        if command == 'crawl':
-            return self.crawl(**args)
-        else:
-            return Job(None, params).create(command, **args)
 
-    def inject  (self, **args):  return self.jobCreate('INJECT',   **args)
-    def generate(self, **args):  return self.jobCreate('GENERATE', **args)
-    def fetch   (self, **args):  return self.jobCreate('FETCH',    **args)
-    def parse   (self, **args):  return self.jobCreate('PARSE',    **args)
-    def updatedb(self, **args):  return self.jobCreate('UPDATEDB', **args)
-    def whatelse(self, **args):  return self.jobCreate('WHATELSE', **args)   # what else belong here ??
-
-    def crawl(self, crawlCycle=['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB'], **args):
-        '''Run a full crawl cycle, adding given extra args to the configuration.'''
-        for step in crawlCycle:
-            (job, status) = self.jobCreate(step, **args)
-            if status != 200:
-                die('Could not start %s on server %s, Aborting.' % (step, self.serverEndpoint))
-            time.sleep(1)
-            print(self.jobGetInfo(job.id)[0])
-            print('\nPress return to proceed to next step.\n', file=sys.stderr)
-            sys.stdin.read(1)
-            
-
-class Config:
-    '''Nutch Config class with methods to get the list of named configurations,
+class ConfigClient:
+    '''Nutch Config client with methods to get the list of named configurations,
 get parameters for a named configuration, get an individual parameter of a named configuration,
 create a new named configuration using a parameter dictionary, and delete a named configuration.
     '''
-    def __init__(self, id, serverEndpoint=ServerEndpoint):
+    def __init__(self, id, serverEndpoint=DefaultServerEndpoint):
         self.id = id
         self.serverEndpoint = serverEndpoint
 
@@ -164,16 +131,16 @@ create a new named configuration using a parameter dictionary, and delete a name
     def getInfo(self, id=None):
         if id is None: id = self.id
         return callServer('get', self.serverEndpoint + '/config/' + id)
-    
+
     def getParameter(self, parameterId, id=None):
         if id is None: id = self.id
         return callServer('get', self.serverEndpoint + '/config/%s/%s' % (id, parameterId))
-    
+
     def create(self, id, config, **args):
         '''Create a new named (id) configuration from a parameter dictionary (config).'''
         config.update(args)
         (id, status) = callServer('post', self.serverEndpoint+"/config/%s" % id, config,
-                                  TextResponseHeader)
+                                  TextAcceptHeader)
         self.id = id
         return (self, status)
 
@@ -182,63 +149,201 @@ create a new named configuration using a parameter dictionary, and delete a name
         return callServer('delete', self.serverEndpoint + '/config/' + id)
 
 
-class Job:
-    '''Nutch Job class with methods to getList of jobs, getInfo for a job, create a new job,
-stop a job, and abort a job.
-    '''
-    def __init__(self, id=None, parameters={}, serverEndpoint=ServerEndpoint):
-        self.id = id
-        self.parameters=parameters
-        self.serverEndpoint = serverEndpoint
-        
-    def getList(self):
-        return callServer('get', self.serverEndpoint+'/job')
+class JobClient:
+    '''Nutch Job client with methods to list and create jobs.
 
-    def getInfo(self, id=None):
-        if id is None: id = self.id
-        return callServer('get', self.serverEndpoint + '/job/' + id)
-    
+    When the client is created, a crawlID and confID are associated.
+
+    The client will automatically filter out jobs that do not match the associated crawlId or confId.
+    '''
+    def __init__(self, serverEndpoint, crawlId, confId, errorsFatal=False, parameters=None):
+        """
+        :param serverEndpoint:
+        :param crawlId:
+        :param confId:
+        :param parameters:
+        :return:
+        """
+        self.serverEndpoint = serverEndpoint
+        self.crawlId = crawlId
+        self.confId = confId
+        self.errorsFatal = errorsFatal
+        self.parameters=parameters if parameters else {'args': dict()}
+
+    def _job_owned(self, job):
+        return job['crawlId'] == self.crawlId and job['confId'] == self.crawlId
+
+    def _check_status(self, status):
+        if self.errorsFatal and status != 200:
+            raise NutchException("Unexpected server response: %d" % status)
+
+    def get(self, allJobs=False):
+        """
+        Return list of jobs at this endpoints.
+
+        Call get(allJobs=True) to see all jobs, not just the ones managed by this Client
+        """
+
+        (jobs, status) = callServer('get', self.serverEndpoint+'/job')
+        self._check_status(status)
+
+        return [Job(job['id'], self.serverEndpoint) for job in jobs if allJobs or self._job_owned(job)]
+
+
     def create(self, command, **args):
+        """
+        Create a job given a command and a crawlID
+        :param command: Nutch command, one of nutch.LegalJobs
+        :param args: Additional arguments to pass to the job
+        :return: The job id
+        """
+
         command = command.upper()
         if command not in LegalJobs:
-            warn('Nutch command must be one of: %s' % LegalJobs.join(', '))
+            warn('Nutch command must be one of: %s' % ', '.join(LegalJobs.join))
         else:
             echo2('Starting %s job with args %s' % (command, str(args)))
-        parameters = self.parameters
-        parameters['args'].update(args)
+        parameters = self.parameters.copy()
         parameters['type'] = command
-        (id, status) = callServer('post', self.serverEndpoint+"/job/create", parameters,
-                                   TextResponseHeader)
-        self.id = id
-        return (self, status)
+        parameters['crawlId'] = self.crawlId
+        parameters['confId'] = self.confId
+        parameters['args'].update(args)
 
-    def stop(self):
-        return callServer('post', self.serverEndpoint+'/job/%s/stop' % self.id, TextResponseHeader) 
+        (job_info, status) = callServer('post', self.serverEndpoint+"/job/create", parameters,
+                                   JsonAcceptHeader)
+        self._check_status(status)
 
-    def abort(self):
-        return callServer('post', self.serverEndpoint+'/job/%s/abort' % self.id, TextResponseHeader) 
+        job = Job(job_info['id'], self.serverEndpoint)
+        return job
+
+    # some short-hand functions
+
+    def inject(self, **args):
+        return self.create('INJECT', **args)
+
+    def generate(self, **args):
+        return self.create('GENERATE', **args)
+
+    def fetch(self, **args):
+        return self.create('FETCH', **args)
+
+    def parse(self, **args):
+        return self.create('PARSE', **args)
+
+    def updatedb(self, **args):
+        return self.create('UPDATEDB', **args)
 
 
-def callServer(verb, serviceUrl, data={}, headers=JsonResponseHeader, mock=False,
-               httpVerbs={'get': requests.get, 'put': requests.put, 'post': requests.post,
-                          'delete': requests.delete}):
+class Nutch:
+    def __init__(self, confId=DefaultConfig, serverEndpoint=DefaultServerEndpoint,
+                 **args):
+        '''
+        Nutch client for interacting with a Nutch instance over its REST API.
+
+        Constructor:
+
+        nt = Nutch()
+
+        Optional arguments:
+
+        serverEndpoint - The server endpoint to use, by default: nutch.DefaultServerEndpoint
+        confID - The name of the default configuration file to use, by default: nutch.DefaultConfig
+
+        Provides functions:
+            server - getServerStatus, stopServer
+            config - get list of configurations, get config. dict, get an individual config. parameter,
+                     and create a new named configuration.
+            job - get list of running jobs, get job metadata, stop/abort a job by id, and create a new job
+
+        To start a crawl job, use:
+            jobCreate - or use the methods inject, generate, fetch, parse, updatedb in that order.
+
+        To run a crawl in one method, use:
+        -- nt = Nutch()
+        -- response, status = nt.crawl()
+
+        Methods return a tuple of two items, the response content (JSON or text) and the response status.
+        '''
+
+        self.confId = confId
+        self.serverEndpoint = serverEndpoint
+        self.job_parameters = dict()
+        self.job_parameters['confId'] = confId
+        self.job_parameters['args'] = args     # additional config. args as a dictionary
+
+    def Jobs(self, crawlId=defaultCrawlId()):
+        """
+        Create a JobClient for listing and creating jobs.
+        The JobClient inherits the confId from the Nutch client.
+
+        :param crawlId: crawlIds to use for this client.  If not provided, will be generated
+         by nutch.defaultCrawlId()
+        :return: a JobClient
+        """
+        return JobClient(self.serverEndpoint, crawlId, self.confId)
+
+    def getServerStatus(self):
+        return callServer('get', self.serverEndpoint + '/admin')
+
+
+    def stopServer(self):
+        return callServer('post', self.serverEndpoint + '/admin/stop', headers=TextAcceptHeader)
+
+
+    def configGetList(self):
+        return Config().getList()
+
+
+    def configGetInfo(self, id):
+        return Config(id).getInfo()
+
+
+    def configGetParameter(self, id, parameterId):
+        return Config(id).getParameter(parameterId)
+
+    def configCreate(self, id, config, **args): return Config(id).create(config, **args)
+
+
+    def crawl(self, crawlCycle=['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB'], **args):
+        '''Run a full crawl cycle, adding given extra args to the configuration.'''
+
+        jobClient = self.Jobs(errorsFatal=True)
+
+        for step in crawlCycle:
+            (job, status) = jobClient.create(step, **args)
+            if status != 200:
+                die('Could not start %s on server %s, Aborting.' % (step, self.serverEndpoint))
+            time.sleep(1)
+            print(self.jobGetInfo(job.id)[0])
+            print('\nPress return to proceed to next step.\n', file=sys.stderr)
+            sys.stdin.read(1)
+
+
+def callServer(verb, serviceUrl, data=None, headers=JsonAcceptHeader):
     """Call the Nutch Server, do some error checking, and return the response."""
-    global Verbose, Mock
-    if verb not in httpVerbs:
-        die('Server call verb must be one of %s' % str(httpVerbs.keys()))
+
+    data = data if data else {}
+
+    if verb not in RequestVerbs:
+        die('Server call verb must be one of %s' % str(RequestVerbs.keys()))
     if Verbose:
+        echo2("%s Endpoint:" % verb.upper(), serviceUrl)
         echo2("%s Request data:" % verb.upper(), data)
         echo2("%s Request headers:" % verb.upper(), headers)
-    data = json.dumps(data)
-    verbFn = httpVerbs[verb]
-    if Mock: return ('mock', 200)
-    resp = verbFn(serviceUrl, data, headers=headers)
+    verbFn = RequestVerbs[verb]
+
+    resp = verbFn(serviceUrl, json=data, headers=headers)
     if Verbose:
         echo2("Response headers:", resp.headers)
     if resp.status_code != 200:
         warn('Nutch server returned status:', resp.status_code)
-    return (resp.content, resp.status_code)
-
+    content_type = resp.headers['content-type']
+    if content_type == 'application/json':
+        return (resp.json(), resp.status_code)
+    elif content_type == 'application/text':
+        return (resp.text(), resp.status_code)
+    else:
+        die('Did not understand server response: %s' % resp.headers)
 
 def main(argv=None):
     """Run Nutch command using REST API."""
@@ -255,8 +360,10 @@ def main(argv=None):
         print(err) # will print something like "option -a not recognized"
         die()
         
-    serverEndpoint = ServerEndpoint
+    serverEndpoint = DefaultServerEndpoint
     port = Port
+
+    # TODO: Fix this
     for opt, val in opts:
         if opt   in ('-h', '--help'):    echo2(USAGE); sys.exit()
         elif opt in ('-s', '--server'):  serverEndpoint = val
