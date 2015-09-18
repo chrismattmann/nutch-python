@@ -16,6 +16,9 @@
 # limitations under the License.
 # 
 
+from __future__ import print_function
+from __future__ import division
+
 USAGE = """
 A simple python client for Nutch using the Nutch server REST API.
 Most commands return results in JSON format by default, or plain text.
@@ -69,7 +72,7 @@ Verbose = 0
 Mock = 0
 def echo2(*s): sys.stderr.write('nutch.py: ' + ' '.join(map(str, s)) + '\n')
 def warn(*s):  echo2('Warn:', *s)
-def die(*s):   warn('Error:',  *s); echo2(USAGE); sys.exit()
+def die(*s):   echo2('Error:',  *s); echo2(USAGE); sys.exit()
 
 
 class Nutch:
@@ -141,8 +144,8 @@ Methods return a tuple of two items, the response content (JSON or text) and the
             if status != 200:
                 die('Could not start %s on server %s, Aborting.' % (step, self.serverEndpoint))
             time.sleep(1)
-            print self.jobGetInfo(job.id)[0]
-            print >>sys.stderr, '\nPress return to proceed to next step.\n'
+            print(self.jobGetInfo(job.id)[0])
+            print('\nPress return to proceed to next step.\n', file=sys.stderr)
             sys.stdin.read(1)
             
 
@@ -247,8 +250,10 @@ def main(argv=None):
     try:
         opts, argv = getopt.getopt(argv[1:], 'hs:p:mv',
           ['help', 'server=', 'port=', 'mock', 'verbose'])
-    except getopt.GetoptError, (msg, bad_opt):
-        die("%s error: Bad option: %s, %s" % (argv[0], bad_opt, msg))
+    except getopt.GetoptError as err:
+        # print help information and exit:
+        print(err) # will print something like "option -a not recognized"
+        die()
         
     serverEndpoint = ServerEndpoint
     port = Port
@@ -273,7 +278,7 @@ def main(argv=None):
 
 if __name__ == '__main__':
     resp = main(sys.argv)
-    print resp[0]
+    print(resp[0])
 
 
 # python nutch.py inject crawl01 default "url/" "{'foo': 'bar'}"
