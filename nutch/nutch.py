@@ -291,17 +291,17 @@ class Nutch:
 
 
     def configGetList(self):
-        return Config().getList()
+        return ConfigClient().getList()
 
 
     def configGetInfo(self, id):
-        return Config(id).getInfo()
+        return ConfigClient(id).getInfo()
 
 
     def configGetParameter(self, id, parameterId):
-        return Config(id).getParameter(parameterId)
+        return ConfigClient(id).getParameter(parameterId)
 
-    def configCreate(self, id, config, **args): return Config(id).create(config, **args)
+    def configCreate(self, id, config, **args): return ConfigClient(id).create(config, **args)
 
 
     def crawl(self, crawlCycle=['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB'], **args):
@@ -386,7 +386,3 @@ def main(argv=None):
 if __name__ == '__main__':
     resp = main(sys.argv)
     print(resp[0])
-
-
-# python nutch.py inject crawl01 default "url/" "{'foo': 'bar'}"
-
