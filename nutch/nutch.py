@@ -137,20 +137,31 @@ class Server:
             if self.raiseErrors:
                 error = NutchException("Unexpected server response: %d" % resp.status_code)
                 error.status_code = resp.status_code
+                raise error
             else:
                 warn('Nutch server returned status:', resp.status_code)
         content_type = resp.headers['content-type']
         if content_type == 'application/json':
-            return (resp.json(), resp.status_code)
+            return resp.json()
         elif content_type == 'application/text':
-            return (resp.text(), resp.status_code)
+            return resp.text()
         else:
             die('Did not understand server response: %s' % resp.headers)
 
-defaultServer = lambda(): Server(DefaultServerEndpoint)
+defaultServer = lambda: Server(DefaultServerEndpoint)
+
+# via http://stackoverflow.com/a/390511/122022
+class CommonEqualityMixin(object):
+
+    def __eq__(self, other):
+        return (isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
-class Job:
+class Job(CommonEqualityMixin):
     """
     Representation of a running Nutch job, use JobClient to get a list of running jobs or to create one
     """
@@ -170,7 +181,7 @@ class Job:
         return self.server.call('get', '/job/%s/abort' % self.id)
 
 
-class Config:
+class Config(CommonEqualityMixin):
     """
     Representation of an active Nutch configuration
 
@@ -234,7 +245,7 @@ class JobClient:
         self.parameters=parameters if parameters else {'args': dict()}
 
     def _job_owned(self, job):
-        return job['crawlId'] == self.crawlId and job['confId'] == self.crawlId
+        return job['crawlId'] == self.crawlId and job['confId'] == self.confId
 
     def list(self, allJobs=False):
         """
@@ -357,7 +368,7 @@ class Nutch:
     def configGetParameter(self, cid, parameterId):
         return Config(cid, self.server).parameter(parameterId)
 
-    def configCreate(self, cid, config_data)
+    def configCreate(self, cid, config_data):
         return self.Configs().create(cid, config_data)
 
     def crawl(self, crawlCycle=None, **args):
