@@ -65,20 +65,30 @@ def test_seed_client_constructor():
     sc = get_seed_client()
     assert sc
 
-def test_seed_create():
+
+def get_seed(seed_urls=('http://aron.ahmadia.net', 'http://www.google.com')):
     sc = get_seed_client()
-    seed_urls = ['http://aron.ahmadia.net', 'http://www.google.com']
-    seed = sc.create('aron', seed_urls)
+    return sc.create('test_seed', seed_urls)
+
+
+def test_seed_create():
+    seed_urls = ('http://aron.ahmadia.net', 'http://www.google.com')
+    seed = get_seed(seed_urls)
     seed_path = seed.seedPath
     with open(glob.glob(seed_path + '/*.txt')[0]) as f:
         seed_data = f.read()
-    assert seed_data.split() == seed_urls
+    assert seed_data.split() == list(seed_urls)
 
 ## Jobs
 
 def get_job_client():
     return get_nutch().Jobs()
 
+def get_inject_job(jc=None):
+    seed = get_seed()
+    if jc is None:
+        jc = get_job_client()
+    return jc.inject(seed)
 
 def test_job_client_constructor():
     jc = get_job_client()
@@ -87,7 +97,7 @@ def test_job_client_constructor():
 def test_job_start():
     jc = get_job_client()
     old_jobs = jc.list()
-    inject_job = jc.inject()
+    inject_job = get_inject_job(jc)
     updated_jobs = jc.list()
     assert(len(updated_jobs) == len(old_jobs) + 1)
 
@@ -101,7 +111,7 @@ def test_job_client_lists():
     jc1 = get_job_client()
     jc2 = get_job_client()
 
-    jc1_job = jc1.inject()
+    jc1_job = get_inject_job(jc1)
 
     # only jobs with the same crawlId are returned in the list()
     assert jc1_job in jc1.list()
@@ -113,18 +123,28 @@ def test_job_client_lists():
 
 def test_job_inject():
     nt = get_nutch()
-    jc = nt.Jobs()
-    inject_job = jc.inject()
+    inject_job = get_inject_job()
     job_info = inject_job.info()
     assert job_info['type'] == 'INJECT'
-
+    assert job_info['msg'] == 'OK'
     # jobs have the same configuration as the Nutch instance
-    assert(inject_job.info()['confId'] == nt.confId)
+    assert(job_info['confId'] == nt.confId)
 
+def test_job_generate():
+    nt = get_nutch()
+    # need to inject before generating...
+    jc = get_job_client()
+    get_inject_job(jc)
+    # wait until injection is done
+    # TODO: Implement
+
+
+def test_job_fetch():
+    # TODO: Implement
+    pass
 
 def test_job_stop():
-    jc = get_job_client()
-    inject_job = jc.inject()
+    inject_job = get_inject_job()
     inject_job.stop()
     # bad jobs will eventually enter the 'FAILED' state
     # is there a better test here?
@@ -132,8 +152,7 @@ def test_job_stop():
 
 
 def test_job_abort():
-    jc = get_job_client()
-    inject_job = jc.inject()
+    inject_job = get_inject_job()
     inject_job.abort()
     assert(inject_job.info()['state'] == 'KILLED')
 

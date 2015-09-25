@@ -77,6 +77,9 @@ JsonAcceptHeader = {'Accept': 'application/json'}
 class NutchException(Exception):
     status_code = None
 
+class NutchQueueException(NutchException):
+    completed_jobs = []
+
 # TODO: Replace with Python logger
 Verbose = True
 def echo2(*s): sys.stderr.write('nutch.py: ' + ' '.join(map(str, s)) + '\n')
@@ -88,9 +91,9 @@ def defaultCrawlId():
     Provide a reasonable default crawl name using the user name and date
     """
 
-    now = datetime.now()
+    timestamp = datetime.now().isoformat().replace(':', '_')
     user = getuser()
-    return '_'.join(('crawl', user, now.isoformat()))
+    return '_'.join(('crawl', user, timestamp))
 
 class Server:
     """
@@ -324,7 +327,23 @@ class JobClient:
 
     # some short-hand functions
 
-    def inject(self, **args):
+    def inject(self, seed=None, urlDir=None, **args):
+        """
+        :param seed: A Seed object (this or urlDir must be specified)
+        :param urlDir: The directory on the server containing the seed list (this or urlDir must be specified)
+        :param args: Extra arguments for the job
+        :return: a created Job object
+        """
+
+        if seed:
+            if urlDir and urlDir != seed.seedPath:
+                raise NutchException("Can't specify both seed and urlDir")
+            urlDir = seed.seedPath
+        elif urlDir:
+            pass
+        else:
+            raise NutchException("Must specify seed or urlDir")
+        args['url_dir'] = urlDir
         return self.create('INJECT', **args)
 
     def generate(self, **args):
@@ -369,6 +388,29 @@ class SeedClient():
         seedPath = self.server.call('post', "/seed/create", seedListData, JsonAcceptHeader, forceText=True)
         new_seed = Seed(sid, seedPath, self.server)
         return new_seed
+
+class Queue():
+    def __init__(self, server, jobs):
+        """Nutch Job Queue manager
+
+        Manages a queue of jobs that must be executed sequentially
+        """
+        self.server = server
+        self.jobs = jobs
+
+    def next(self):
+        """
+        Execute the next job in the queue and return it when it is finished
+        :return: the completed Job
+        """
+
+    def waitAll(self):
+        """
+        Execute all jobs in the queue and return when they have finished.
+
+        If a job fails, a NutchQueueException will be raised, with all completed jobs attached
+        to the exception
+        """
 
 class Nutch:
     def __init__(self, confId=DefaultConfig, serverEndpoint=DefaultServerEndpoint, raiseErrors=True, **args):
@@ -449,6 +491,7 @@ class Nutch:
         '''Run a full crawl cycle, adding given extra args to the configuration.'''
 
         crawlCycle= crawlCycle if crawlCycle is not None else ['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB']
+
         jobClient = self.Jobs()
 
         for step in crawlCycle:
