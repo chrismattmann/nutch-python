@@ -396,6 +396,7 @@ def main(argv=None):
         print(err) # will print something like "option -a not recognized"
         die()
 
+    serverEndpoint = DefaultServerEndpoint
     # TODO: Fix this
     for opt, val in opts:
         if opt   in ('-h', '--help'):    echo2(USAGE); sys.exit()
@@ -412,7 +413,7 @@ def main(argv=None):
     args = {}
     if len(argv) > 4: args = eval(argv[4])
 
-    nt = Nutch(crawlId, confId, urlDir)
+    nt = Nutch(crawlId, confId, serverEndpoint, urlDir)
     nt.Jobs().create(cmd, **args)
 
 
