@@ -19,24 +19,49 @@
 # TODO: Package into Travis tests
 
 import nutch
+import pytest
 
 def get_nutch():
     return nutch.Nutch()
-
-
-def get_job_client():
-    return get_nutch().Jobs()
 
 
 def test_nutch_constructor():
     nt = get_nutch()
     assert nt
 
+## Configurations
+
+def get_config_client():
+    return get_nutch().Configs()
+
+def test_config_client_constructor():
+    cc = get_config_client()
+    assert cc
+
+def test_config_access():
+    cc = get_config_client()
+    default_config = cc['default']
+    # there has to be something smarter to check here
+    assert default_config.info()
+
+# I don't know how to get this working
+@pytest.mark.xfail
+def test_config_create():
+    cc = get_config_client()
+    default_config = cc['default']
+    default_config_data = default_config.info()
+    default_config_copy = cc['defaultcopy'] = default_config_data
+    assert default_config_copy.info()
+
+## Jobs
+
+def get_job_client():
+    return get_nutch().Jobs()
+
 
 def test_job_client_constructor():
     jc = get_job_client()
     assert jc
-
 
 def test_job_start():
     jc = get_job_client()

@@ -56,6 +56,7 @@ To see the status of jobs, use:
 
 """
 
+import collections
 import getopt
 from getpass import getuser
 import json
@@ -151,7 +152,9 @@ class Server:
 defaultServer = lambda: Server(DefaultServerEndpoint)
 
 class IdEqualityMixin(object):
-
+    """
+    Mix-in class to use self.id == other.id to check for equality
+    """
     def __eq__(self, other):
         return (isinstance(other, self.__class__)
             and self.id == other.id)
@@ -212,8 +215,8 @@ class ConfigClient:
         self.server = server
 
     def list(self):
-        # TODO: This should return a list of Config objects
-        return self.server.call('get', '/config')
+        configs = self.server.call('get', '/config')
+        return [Config(cid, self.server) for cid in configs]
 
     def create(self, cid, config_data):
         """
@@ -224,6 +227,32 @@ class ConfigClient:
         new_config = Config(cid, self.server)
         return new_config
 
+    def __getitem__(self, item):
+        """
+        Overload [] to provide get access to configurations
+        :param item: the name of a configuration
+        :return: the Config object if the name is valid, otherwise raise KeyError
+        """
+
+        # let's be optimistic...
+        config = Config(item, self.server)
+        if config.info():
+            return config
+
+        # not found!
+        raise KeyError
+
+    def __setitem__(self, key, value):
+        """
+        Overload [] to provide set access to configurations
+        :param key: the name of the configuration to create
+        :param value: the dict-like data associated with this configuration
+        :return: the created Config object
+        """
+
+        if not isinstance(value, collections.Mapping):
+            raise TypeError(repr(value) + "is not a dict-like object")
+        return self.create(key, value)
 
 class JobClient:
     def __init__(self, server, crawlId, confId, parameters=None):
@@ -238,6 +267,7 @@ class JobClient:
         :param parameters:
         :return:
         """
+
         self.server = server
         self.crawlId = crawlId
         self.confId = confId
