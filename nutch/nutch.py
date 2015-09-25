@@ -150,18 +150,17 @@ class Server:
 
 defaultServer = lambda: Server(DefaultServerEndpoint)
 
-# via http://stackoverflow.com/a/390511/122022
-class CommonEqualityMixin(object):
+class IdEqualityMixin(object):
 
     def __eq__(self, other):
         return (isinstance(other, self.__class__)
-            and self.__dict__ == other.__dict__)
+            and self.id == other.id)
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
 
-class Job(CommonEqualityMixin):
+class Job(IdEqualityMixin):
     """
     Representation of a running Nutch job, use JobClient to get a list of running jobs or to create one
     """
@@ -181,7 +180,7 @@ class Job(CommonEqualityMixin):
         return self.server.call('get', '/job/%s/abort' % self.id)
 
 
-class Config(CommonEqualityMixin):
+class Config(IdEqualityMixin):
     """
     Representation of an active Nutch configuration
 
@@ -337,7 +336,7 @@ class Nutch:
         self.job_parameters['confId'] = confId
         self.job_parameters['args'] = args     # additional config. args as a dictionary
 
-    def Jobs(self, crawlId=defaultCrawlId()):
+    def Jobs(self, crawlId=None):
         """
         Create a JobClient for listing and creating jobs.
         The JobClient inherits the confId from the Nutch client.
@@ -346,6 +345,7 @@ class Nutch:
          by nutch.defaultCrawlId()
         :return: a JobClient
         """
+        crawlId = crawlId if crawlId else defaultCrawlId()
         return JobClient(self.server, crawlId, self.confId)
 
     def Configs(self):
