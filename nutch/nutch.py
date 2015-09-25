@@ -59,9 +59,7 @@ To see the status of jobs, use:
 import collections
 import getopt
 from getpass import getuser
-import json
 import sys
-import time
 from datetime import datetime
 import requests
 
@@ -111,7 +109,7 @@ class Server:
         self.raiseErrors = raiseErrors
 
 
-    def call(self, verb, servicePath, data=None, headers=JsonAcceptHeader):
+    def call(self, verb, servicePath, data=None, headers=JsonAcceptHeader, forceText=False):
         """Call the Nutch Server, do some error checking, and return the response.
 
         :param verb: One of nutch.RequestVerbs
@@ -142,10 +140,10 @@ class Server:
             else:
                 warn('Nutch server returned status:', resp.status_code)
         content_type = resp.headers['content-type']
-        if content_type == 'application/json':
+        if content_type == 'application/json' and not forceText:
             return resp.json()
-        elif content_type == 'application/text':
-            return resp.text()
+        elif content_type == 'application/text' or forceText:
+            return resp.text
         else:
             die('Did not understand server response: %s' % resp.headers)
 
@@ -204,6 +202,19 @@ class Config(IdEqualityMixin):
         return self.server.call('get', '/config/%s/%s' % (self.id, parameterId))
 
 
+class Seed(IdEqualityMixin):
+    """
+    Representation of an active Nutch seed list
+
+    Use SeedClient to get a list of seed lists or create a new one
+    """
+
+    def __init__(self, sid, seedPath, server):
+        self.id = sid
+        self.seedPath = seedPath
+        self.server = server
+
+
 class ConfigClient:
     def __init__(self, server):
         """Nutch Config client
@@ -218,12 +229,12 @@ class ConfigClient:
         configs = self.server.call('get', '/config')
         return [Config(cid, self.server) for cid in configs]
 
-    def create(self, cid, config_data):
+    def create(self, cid, configData):
         """
         Create a new named (cid) configuration from a parameter dictionary (config_data).
         """
 
-        cid = self.server.call('post', "/config/%s" % cid, config_data, TextAcceptHeader)
+        cid = self.server.call('post', "/config/%s" % cid, configData, TextAcceptHeader)
         new_config = Config(cid, self.server)
         return new_config
 
@@ -297,7 +308,7 @@ class JobClient:
 
         command = command.upper()
         if command not in LegalJobs:
-            warn('Nutch command must be one of: %s' % ', '.join(LegalJobs.join))
+            warn('Nutch command must be one of: %s' % ', '.join(LegalJobs))
         else:
             echo2('Starting %s job with args %s' % (command, str(args)))
         parameters = self.parameters.copy()
@@ -328,6 +339,36 @@ class JobClient:
     def updatedb(self, **args):
         return self.create('UPDATEDB', **args)
 
+class SeedClient():
+
+    def __init__(self, server):
+        """Nutch Seed client
+
+        Client for uploading seed lists to Nutch
+        """
+        self.server = server
+
+    def create(self, sid, seedList):
+        """
+        Create a new named (sid) Seed from a list of seed URLs
+
+        :param sid: the name to assign to the new seed list
+        :param seedList: the list of seeds to use
+        :return: the created Seed object
+        """
+
+        seedUrl = lambda uid, url: {"id": uid, "url": url, "seedList": None}
+
+        seedListData = {
+            "id": "12345",
+            "name": sid,
+            "seedUrls": [seedUrl(uid, url) for uid, url in enumerate(seedList)]
+        }
+
+        # see https://issues.apache.org/jira/browse/NUTCH-2123
+        seedPath = self.server.call('post', "/seed/create", seedListData, JsonAcceptHeader, forceText=True)
+        new_seed = Seed(sid, seedPath, self.server)
+        return new_seed
 
 class Nutch:
     def __init__(self, confId=DefaultConfig, serverEndpoint=DefaultServerEndpoint, raiseErrors=True, **args):
@@ -380,6 +421,9 @@ class Nutch:
 
     def Configs(self):
         return ConfigClient(self.server)
+
+    def Seeds(self):
+        return SeedClient(self.server)
 
     ## convenience functions
     ## TODO: Decide if any of these should be deprecated.

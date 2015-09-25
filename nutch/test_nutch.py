@@ -20,6 +20,7 @@
 
 import nutch
 import pytest
+import glob
 
 def get_nutch():
     return nutch.Nutch()
@@ -52,6 +53,26 @@ def test_config_create():
     default_config_data = default_config.info()
     default_config_copy = cc['defaultcopy'] = default_config_data
     assert default_config_copy.info()
+
+## Seed Lists
+
+# Fairly limited functionality for working with seed lists
+
+def get_seed_client():
+    return get_nutch().Seeds()
+
+def test_seed_client_constructor():
+    sc = get_seed_client()
+    assert sc
+
+def test_seed_create():
+    sc = get_seed_client()
+    seed_urls = ['http://aron.ahmadia.net', 'http://www.google.com']
+    seed = sc.create('aron', seed_urls)
+    seed_path = seed.seedPath
+    with open(glob.glob(seed_path + '/*.txt')[0]) as f:
+        seed_data = f.read()
+    assert seed_data.split() == seed_urls
 
 ## Jobs
 
