@@ -77,7 +77,7 @@ JsonAcceptHeader = {'Accept': 'application/json'}
 class NutchException(Exception):
     status_code = None
 
-class NutchQueueException(NutchException):
+class NutchCrawlException(NutchException):
     completed_jobs = []
 
 # TODO: Replace with Python logger
@@ -271,7 +271,7 @@ class ConfigClient:
 class JobClient:
     def __init__(self, server, crawlId, confId, parameters=None):
         """
-        Nutch Job client with methods to list and create jobs.
+        Nutch Job client with methods to list, create jobs.
 
         When the client is created, a crawlID and confID are associated.
         The client will automatically filter out jobs that do not match the associated crawlId or confId.
@@ -292,7 +292,7 @@ class JobClient:
 
     def list(self, allJobs=False):
         """
-        Return list of jobs at this endpoints.
+        Return list of jobs at this endpoint.
 
         Call get(allJobs=True) to see all jobs, not just the ones managed by this Client
         """
@@ -389,28 +389,72 @@ class SeedClient():
         new_seed = Seed(sid, seedPath, self.server)
         return new_seed
 
-class Queue():
-    def __init__(self, server, jobs):
-        """Nutch Job Queue manager
 
-        Manages a queue of jobs that must be executed sequentially
+class CrawlClient():
+    def __init__(self, server, seedList, seedClient, jobClient, rounds):
+        """Nutch Crawl manager
+
+        High-level Nutch client for managing crawls.
+
+        When this client is initialized, the seedList will automatically be injected.
+        There are four ways to proceed from here.
+
+        progress() - checks the status of the current job, enqueue the next job if the current job is finished,
+                     and return immediately
+        waitJob() - wait until the current job is finished and return
+        waitRound() - wait and enqueue jobs until the current round is finished and return
+        waitAll() - wait and enqueue jobs until all rounds are finished and return
+
+        It is recommended to use progress() in a while loop for any applications that need to remain interactive.
+
         """
         self.server = server
-        self.jobs = jobs
+        self.seedList = seedList
+        self.seedClient = seedClient
+        self.jobClient = jobClient
+        self.rounds = rounds
+        self.current_job = None
+        self.finished_jobs = []
 
-    def next(self):
+        # dispatch injection
+
+        # enqueue remaining tasks
+
+    def nextJob(self):
         """
-        Execute the next job in the queue and return it when it is finished
+        Execute the next job in the round and return it when it is finished
         :return: the completed Job
+        """
+
+    def pause(self):
+        """
+        Gracefully pause execution by not launching any subsequent jobs
+        :return:
+        """
+
+    def addRounds(self, numRounds=1):
+        """
+        Add more rounds to the crawl.
+        :return:
+        """
+
+    def nextRound(self):
+        """
+        Execute all jobs in the current round and return when they have finished.
+
+        If a job fails, a NutchCrawlException will be raised, with all completed jobs attached
+        to the exception
         """
 
     def waitAll(self):
         """
-        Execute all jobs in the queue and return when they have finished.
+        Execute all queued rounds and return when they have finished.
 
-        If a job fails, a NutchQueueException will be raised, with all completed jobs attached
+        If a job fails, a NutchCrawlException will be raised, with all completed jobs attached
         to the exception
+        :return:
         """
+
 
 class Nutch:
     def __init__(self, confId=DefaultConfig, serverEndpoint=DefaultServerEndpoint, raiseErrors=True, **args):
@@ -466,6 +510,13 @@ class Nutch:
 
     def Seeds(self):
         return SeedClient(self.server)
+
+    def Crawl(self, seedList, seedClient=None, jobClient=None, rounds=1):
+        if seedClient is None:
+            seedClient = self.Seeds()
+        if jobClient is None:
+            jobClient = self.Jobs()
+        return CrawlClient(self.server, seedList, seedClient, jobClient, rounds)
 
     ## convenience functions
     ## TODO: Decide if any of these should be deprecated.
