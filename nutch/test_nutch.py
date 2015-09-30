@@ -23,6 +23,8 @@ import pytest
 import glob
 from time import sleep
 
+slow = pytest.mark.slow
+
 def get_nutch():
     return nutch.Nutch()
 
@@ -179,16 +181,13 @@ def get_crawl_client():
     seed = get_seed()
     return get_nutch().Crawl(seed)
 
-def get_inject_job(jc=None):
-    seed = get_seed()
-    if jc is None:
-        jc = get_job_client()
-    return jc.inject(seed)
-
+@slow
 def test_crawl_client():
     cc = get_crawl_client()
     assert cc.currentJob.info()['type'] == 'INJECT'
-    cc.waitAll()
+    rounds = cc.waitAll()
+    assert len(rounds) == 1
     assert cc.currentJob is None
-    # flesh this test out more?
-
+    jobs = rounds[0]
+    assert len(jobs) == 4
+    assert all([j.info()['state'] == 'FINISHED' for j in jobs])

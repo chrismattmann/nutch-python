@@ -57,17 +57,18 @@ To see the status of jobs, use:
 """
 
 import collections
+from datetime import datetime
 import getopt
 from getpass import getuser
-import sys
-from datetime import datetime
 import requests
+import sys
 from time import sleep
 
 DefaultServerHost = "localhost"
 DefaultPort = "8081"
 DefaultServerEndpoint = 'http://' + DefaultServerHost + ':' + DefaultPort
 DefaultConfig = 'default'
+DefaultUserAgent = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
 
 LegalJobs = ['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB', 'CRAWL']
 RequestVerbs = {'get': requests.get, 'put': requests.put, 'post': requests.post, 'delete': requests.delete}
@@ -75,18 +76,33 @@ RequestVerbs = {'get': requests.get, 'put': requests.put, 'post': requests.post,
 TextAcceptHeader = {'Accept': 'text/plain'}
 JsonAcceptHeader = {'Accept': 'application/json'}
 
+
 class NutchException(Exception):
     status_code = None
+
 
 class NutchCrawlException(NutchException):
     current_job = None
     completed_jobs = []
 
+
 # TODO: Replace with Python logger
 Verbose = True
-def echo2(*s): sys.stderr.write('nutch.py: ' + ' '.join(map(str, s)) + '\n')
-def warn(*s):  echo2('Warn:', *s)
-def die(*s):   echo2('Error:',  *s); echo2(USAGE); sys.exit()
+
+
+def echo2(*s):
+    sys.stderr.write('nutch.py: ' + ' '.join(map(str, s)) + '\n')
+
+
+def warn(*s):
+    echo2('Warn:', *s)
+
+
+def die(*s):
+    echo2('Error:',  *s)
+    echo2(USAGE)
+    sys.exit()
+
 
 def defaultCrawlId():
     """
@@ -96,6 +112,7 @@ def defaultCrawlId():
     timestamp = datetime.now().isoformat().replace(':', '_')
     user = getuser()
     return '_'.join(('crawl', user, timestamp))
+
 
 class Server:
     """
@@ -112,7 +129,6 @@ class Server:
         """
         self.serverEndpoint = serverEndpoint
         self.raiseErrors = raiseErrors
-
 
     def call(self, verb, servicePath, data=None, headers=JsonAcceptHeader, forceText=False):
         """Call the Nutch Server, do some error checking, and return the response.
@@ -157,6 +173,7 @@ class Server:
             die('Did not understand server response: %s' % resp.headers)
 
 defaultServer = lambda: Server(DefaultServerEndpoint)
+
 
 class IdEqualityMixin(object):
     """
@@ -209,6 +226,28 @@ class Config(IdEqualityMixin):
 
     def parameter(self, parameterId):
         return self.server.call('get', '/config/%s/%s' % (self.id, parameterId))
+
+    def __getitem__(self, item):
+        """
+        Overload [] to provide get access to parameters
+        :param item: the name of a parameter
+        :return: the parameter if the name is valid, otherwise raise NutchException
+        """
+
+        return self.server.call('get', '/config/%s/%s' % (self.id, item), forceText=True)
+
+    def __setitem__(self, key, value):
+        """
+        Overload [] to provide set access to configurations
+        :param key: the name of the parameter to set
+        :param value: the data associated with this parameter
+        :return: the set value
+        """
+
+        # use the create API (a little funny) to do the update
+        postArgs = {'configId': self.id, 'params': {key: value}, 'force': True}
+        self.server.call('post', '/config/%s' % self.id, postArgs, forceText=True)
+        return value
 
 
 class Seed(IdEqualityMixin):
@@ -416,6 +455,7 @@ class CrawlClient():
         """
         self.server = server
         self.jobClient = jobClient
+        self.crawlId = jobClient.crawlId
         self.currentRound = 1
         self.totalRounds = rounds
         self.currentJob = None
@@ -509,9 +549,10 @@ class CrawlClient():
         oldCurrentJob = self.currentJob
         while self.currentJob:
             self.progress(nextRound=False)  # updates self.currentJob
-            if self.currentJob != oldCurrentJob:
+            if self.currentJob and self.currentJob != oldCurrentJob:
                 finishedJobs.append(self.currentJob)
             sleep(self.sleepTime)
+            oldCurrentJob = self.currentJob
         self.currentRound += 1
         return finishedJobs
 
@@ -550,12 +591,11 @@ class Nutch:
 
         Provides functions:
             server - getServerStatus, stopServer
-            config - get list of configurations, get config. dict, get an individual config. parameter,
-                     and create a new named configuration.
+            config - get and set parameters for this configuration
             job - get list of running jobs, get job metadata, stop/abort a job by id, and create a new job
 
         To start a crawl job, use:
-            jobCreate - or use the methods inject, generate, fetch, parse, updatedb in that order.
+            Crawl() - or use the methods inject, generate, fetch, parse, updatedb in that order.
 
         To run a crawl in one method, use:
         -- nt = Nutch()
@@ -566,9 +606,14 @@ class Nutch:
 
         self.confId = confId
         self.server = Server(serverEndpoint, raiseErrors)
+        self.config = ConfigClient(self.server)[self.confId]
         self.job_parameters = dict()
         self.job_parameters['confId'] = confId
         self.job_parameters['args'] = args     # additional config. args as a dictionary
+
+        # if the configuration doesn't contain a user agent, set a default one.
+        if 'http.agent.name' not in self.config.info():
+            self.config['http.agent.name'] = DefaultUserAgent
 
     def Jobs(self, crawlId=None):
         """
@@ -581,6 +626,9 @@ class Nutch:
         """
         crawlId = crawlId if crawlId else defaultCrawlId()
         return JobClient(self.server, crawlId, self.confId)
+
+    def Config(self):
+        return self.config
 
     def Configs(self):
         return ConfigClient(self.server)
@@ -618,10 +666,10 @@ class Nutch:
         return self.Configs().list()
 
     def configGetInfo(self, cid):
-        return Config(cid, self.server).info()
+        return self.Configs()[cid].info()
 
     def configGetParameter(self, cid, parameterId):
-        return Config(cid, self.server).parameter(parameterId)
+        return self.Configs()[cid][parameterId]
 
     def configCreate(self, cid, config_data):
         return self.Configs().create(cid, config_data)
