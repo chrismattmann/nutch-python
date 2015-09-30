@@ -21,6 +21,7 @@
 import nutch
 import pytest
 import glob
+from time import sleep
 
 def get_nutch():
     return nutch.Nutch()
@@ -45,14 +46,18 @@ def test_config_access():
     # there has to be something smarter to check here
     assert default_config.info()
 
-# I don't know how to get this working
-@pytest.mark.xfail
 def test_config_create():
+    cc = get_config_client()
+    cc['defaultcopy'] = {}
+    assert cc['defaultcopy'].info()["db.fetch.interval.max"]
+
+# I don't know how to get this working
+def test_config_copy():
     cc = get_config_client()
     default_config = cc['default']
     default_config_data = default_config.info()
-    default_config_copy = cc['defaultcopy'] = default_config_data
-    assert default_config_copy.info()
+    cc['defaultcopy'] = default_config_data
+    assert cc['defaultcopy'].info()["db.fetch.interval.max"]
 
 ## Seed Lists
 
@@ -134,14 +139,27 @@ def test_job_generate():
     nt = get_nutch()
     # need to inject before generating...
     jc = get_job_client()
-    get_inject_job(jc)
+    inject = get_inject_job(jc)
     # wait until injection is done
-    # TODO: Implement
 
+    for wait in range(10):
+        if inject.info()['state'] != 'FINISHED':
+            sleep(1)
+            continue
+        else:
+            break
+    else:
+        raise Exception("took too long to inject")
 
-def test_job_fetch():
-    # TODO: Implement
-    pass
+    assert inject.info()['state'] == 'FINISHED'
+
+    generate = jc.generate()
+    job_info = generate.info()
+    assert job_info['type'] == 'GENERATE'
+    assert job_info['msg'] == 'OK'
+    # jobs have the same configuration as the Nutch instance
+    assert(job_info['confId'] == nt.confId)
+
 
 def test_job_stop():
     inject_job = get_inject_job()
@@ -155,5 +173,22 @@ def test_job_abort():
     inject_job = get_inject_job()
     inject_job.abort()
     assert(inject_job.info()['state'] == 'KILLED')
-
 # How do we delete jobs using the REST API?  Is it even possible?
+
+def get_crawl_client():
+    seed = get_seed()
+    return get_nutch().Crawl(seed)
+
+def get_inject_job(jc=None):
+    seed = get_seed()
+    if jc is None:
+        jc = get_job_client()
+    return jc.inject(seed)
+
+def test_crawl_client():
+    cc = get_crawl_client()
+    assert cc.currentJob.info()['type'] == 'INJECT'
+    cc.waitAll()
+    assert cc.currentJob is None
+    # flesh this test out more?
+

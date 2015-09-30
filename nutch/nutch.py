@@ -62,6 +62,7 @@ from getpass import getuser
 import sys
 from datetime import datetime
 import requests
+from time import sleep
 
 DefaultServerHost = "localhost"
 DefaultPort = "8081"
@@ -78,6 +79,7 @@ class NutchException(Exception):
     status_code = None
 
 class NutchCrawlException(NutchException):
+    current_job = None
     completed_jobs = []
 
 # TODO: Replace with Python logger
@@ -144,8 +146,12 @@ class Server:
                 warn('Nutch server returned status:', resp.status_code)
         content_type = resp.headers['content-type']
         if content_type == 'application/json' and not forceText:
+            if Verbose:
+                echo2("Response JSON:", resp.json())
             return resp.json()
         elif content_type == 'application/text' or forceText:
+            if Verbose:
+                echo2("Response text:", resp.text)
             return resp.text
         else:
             die('Did not understand server response: %s' % resp.headers)
@@ -236,8 +242,8 @@ class ConfigClient:
         """
         Create a new named (cid) configuration from a parameter dictionary (config_data).
         """
-
-        cid = self.server.call('post', "/config/%s" % cid, configData, TextAcceptHeader)
+        configArgs = {'configId': cid, 'params': configData, 'force': True}
+        cid = self.server.call('post', "/config/%s" % cid, configArgs, forceText=True)
         new_config = Config(cid, self.server)
         return new_config
 
@@ -306,7 +312,7 @@ class JobClient:
         Create a job given a command
         :param command: Nutch command, one of nutch.LegalJobs
         :param args: Additional arguments to pass to the job
-        :return: The job id
+        :return: The created Job
         """
 
         command = command.upper()
@@ -391,7 +397,7 @@ class SeedClient():
 
 
 class CrawlClient():
-    def __init__(self, server, seedList, seedClient, jobClient, rounds):
+    def __init__(self, server, seed, jobClient, rounds):
         """Nutch Crawl manager
 
         High-level Nutch client for managing crawls.
@@ -409,42 +415,105 @@ class CrawlClient():
 
         """
         self.server = server
-        self.seedList = seedList
-        self.seedClient = seedClient
         self.jobClient = jobClient
-        self.rounds = rounds
-        self.current_job = None
-        self.finished_jobs = []
+        self.currentRound = 1
+        self.totalRounds = rounds
+        self.currentJob = None
+        self.sleepTime = 1
 
         # dispatch injection
+        self.currentJob = self.jobClient.inject(seed)
 
-        # enqueue remaining tasks
+    def _nextJob(self, job, nextRound=True):
+        """
+        Given a completed job, start the next job in the round, or return None
 
-    def nextJob(self):
-        """
-        Execute the next job in the round and return it when it is finished
-        :return: the completed Job
+        :param nextRound: whether to start jobs from the next round if the current round is completed.
+        :return: the newly started Job, or None if no job was started
         """
 
-    def pause(self):
+        jobInfo = job.info()
+        assert jobInfo['state'] == 'FINISHED'
+
+        if jobInfo['type'] == 'INJECT':
+            nextCommand = 'GENERATE'
+        elif jobInfo['type'] == 'GENERATE':
+            nextCommand = 'FETCH'
+        elif jobInfo['type'] == 'FETCH':
+            nextCommand = 'PARSE'
+        elif jobInfo['type'] == 'PARSE':
+            nextCommand = 'UPDATEDB'
+        elif jobInfo['type'] == 'UPDATEDB':
+            if nextRound and self.currentRound < self.totalRounds:
+                nextCommand = 'GENERATE'
+                self.currentRound += 1
+            else:
+                return None
+        else:
+            raise NutchException("Unrecognized job type {}".format(jobInfo['type']))
+
+        return self.jobClient.create(nextCommand)
+
+    def progress(self, nextRound=True):
         """
-        Gracefully pause execution by not launching any subsequent jobs
-        :return:
+        Check the status of the current job, activate the next job if it's finished, and return the active job
+
+        If the current job has failed, a NutchCrawlException will be raised with no jobs attached.
+
+        :param nextRound: whether to start jobs from the next round if the current job/round is completed.
+        :return: the currently running Job, or None if no jobs are running.
         """
+
+        currentJob = self.currentJob
+        if currentJob is None:
+            return currentJob
+
+        jobInfo = currentJob.info()
+
+        if jobInfo['state'] == 'RUNNING':
+            return currentJob
+        elif jobInfo['state'] == 'FINISHED':
+            nextJob = self._nextJob(currentJob, nextRound)
+            self.currentJob = nextJob
+            return nextJob
+        else:
+            error = NutchCrawlException("Unexpected job state: {}".format(jobInfo['state']))
+            error.current_job = currentJob
+            raise NutchCrawlException
 
     def addRounds(self, numRounds=1):
         """
-        Add more rounds to the crawl.
-        :return:
+        Add more rounds to the crawl.  This command does not start execution.
+
+        :param numRounds: the number of rounds to add to the crawl
+        :return: the total number of rounds scheduled for execution
         """
+
+        self.totalRounds += numRounds
+        return self.totalRounds
 
     def nextRound(self):
         """
         Execute all jobs in the current round and return when they have finished.
 
-        If a job fails, a NutchCrawlException will be raised, with all completed jobs attached
-        to the exception
+        If a job fails, a NutchCrawlException will be raised, with all completed jobs from this round attached
+        to the exception.
+
+        :return: a list of all completed Jobs
         """
+
+        finishedJobs = []
+        if self.currentJob is None:
+            self.currentJob = self.jobClient.create('GENERATE')
+
+        oldCurrentJob = self.currentJob
+        while self.currentJob:
+            self.progress(nextRound=False)  # updates self.currentJob
+            if self.currentJob != oldCurrentJob:
+                finishedJobs.append(self.currentJob)
+            sleep(self.sleepTime)
+        self.currentRound += 1
+        return finishedJobs
 
     def waitAll(self):
         """
@@ -452,8 +521,16 @@ class CrawlClient():
 
         If a job fails, a NutchCrawlException will be raised, with all completed jobs attached
         to the exception
-        :return:
+
+        :return: a list of jobs completed for each round, organized by round (list-of-lists)
         """
+
+        finishedRounds = [self.nextRound()]
+
+        while self.currentRound < self.totalRounds:
+            finishedRounds.append(self.nextRound())
+
+        return finishedRounds
 
 
 class Nutch:
@@ -511,12 +588,23 @@ class Nutch:
     def Seeds(self):
         return SeedClient(self.server)
 
-    def Crawl(self, seedList, seedClient=None, jobClient=None, rounds=1):
+    def Crawl(self, seed, seedClient=None, jobClient=None, rounds=1):
+        """
+        Launch a crawl using the given seed
+        :param seed: Type (Seed or SeedList) - used for crawl
+        :param seedClient: if a SeedList is given, the SeedClient to upload, if None a default will be created
+        :param jobClient: the JobClient to be used, if None a default will be created
+        :param rounds: the number of rounds in the crawl
+        :return: a CrawlClient to monitor and control the crawl
+        """
         if seedClient is None:
             seedClient = self.Seeds()
         if jobClient is None:
             jobClient = self.Jobs()
-        return CrawlClient(self.server, seedList, seedClient, jobClient, rounds)
+
+        if type(seed) != Seed:
+            seed = seedClient.create(jobClient.crawlId + '_seeds', seedList)
+        return CrawlClient(self.server, seed, jobClient, rounds)
 
     ## convenience functions
     ## TODO: Decide if any of these should be deprecated.
@@ -538,16 +626,6 @@ class Nutch:
     def configCreate(self, cid, config_data):
         return self.Configs().create(cid, config_data)
 
-    def crawl(self, crawlCycle=None, **args):
-        '''Run a full crawl cycle, adding given extra args to the configuration.'''
-
-        crawlCycle= crawlCycle if crawlCycle is not None else ['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB']
-
-        jobClient = self.Jobs()
-
-        for step in crawlCycle:
-            job = jobClient.create(step, **args)
-            print(job)
 
 def main(argv=None):
     """Run Nutch command using REST API."""
