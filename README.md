@@ -37,6 +37,7 @@ Contributors
 ============
 * Brian D. Wilson, JPL
 * Chris A. Mattmann, JPL
+* Aron Ahmadia, Continuum Analytics
 
 License
 =======
