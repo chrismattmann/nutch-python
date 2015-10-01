@@ -9,3 +9,4 @@
 /nutch/*/*.pyc
 .DS_Store
 /setup.cfg
+/.eggs/
