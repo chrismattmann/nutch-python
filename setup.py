@@ -75,6 +75,12 @@ setup(
     packages=find_packages(exclude=['ez_setup']),
     include_package_data=True,
     zip_safe=True,
+    setup_requires=[
+        'pytest-runner',
+    ],
+    tests_require=[
+        'pytest',
+    ],
     entry_points={
         'console_scripts': [
             'nutch-python = nutch.nutch:main'
@@ -87,7 +93,5 @@ setup(
     install_requires=[
         'setuptools',
         'requests'
-    ],
-    extras_require={
-    },
+    ]
 )
