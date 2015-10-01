@@ -31,7 +31,7 @@ The options and help for the command line tool can be seen by typing
 
 Questions, comments?
 ===================
-Send them to [Brian D. Wilson](mailto:brian.d.wilson@jpl.nasa.gov).
+Send them to [Chris A. Mattmann](mailto:chris.a.mattmann@jpl.nasa.gov).
 
 Contributors
 ============
