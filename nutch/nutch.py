@@ -421,7 +421,7 @@ class SeedClient():
         :return: the created Seed object
         """
 
-        seedUrl = lambda uid, url: {"id": uid, "url": url, "seedList": None}
+        seedUrl = lambda uid, url: {"id": uid, "url": url}
 
         seedListData = {
             "id": "12345",
