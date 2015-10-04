@@ -546,13 +546,13 @@ class CrawlClient():
         if self.currentJob is None:
             self.currentJob = self.jobClient.create('GENERATE')
 
-        oldCurrentJob = self.currentJob
-        while self.currentJob:
-            self.progress(nextRound=False)  # updates self.currentJob
-            if self.currentJob and self.currentJob != oldCurrentJob:
-                finishedJobs.append(self.currentJob)
+        activeJob = self.progress(nextRound=False)
+        while activeJob:
+            oldJob = activeJob
+            activeJob = self.progress(nextRound=False)  # updates self.currentJob
+            if oldJob and oldJob != activeJob:
+                finishedJobs.append(oldJob)
             sleep(self.sleepTime)
-            oldCurrentJob = self.currentJob
         self.currentRound += 1
         return finishedJobs
 
