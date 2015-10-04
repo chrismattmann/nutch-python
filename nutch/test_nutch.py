@@ -189,5 +189,4 @@ def test_crawl_client():
     assert len(rounds) == 1
     assert cc.currentJob is None
     jobs = rounds[0]
-    assert len(jobs) == 4
     assert all([j.info()['state'] == 'FINISHED' for j in jobs])
