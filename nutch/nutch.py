@@ -165,7 +165,7 @@ class Server:
             if Verbose:
                 echo2("Response JSON:", resp.json())
             return resp.json()
-        elif content_type == 'application/text' or forceText:
+        elif content_type == 'text/plain' or forceText:
             if Verbose:
                 echo2("Response text:", resp.text)
             return resp.text
