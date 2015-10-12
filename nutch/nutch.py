@@ -651,7 +651,7 @@ class Nutch:
             jobClient = self.Jobs()
 
         if type(seed) != Seed:
-            seed = seedClient.create(jobClient.crawlId + '_seeds', seedList)
+            seed = seedClient.create(jobClient.crawlId + '_seeds', seed)
         return CrawlClient(self.server, seed, jobClient, rounds)
 
     ## convenience functions
