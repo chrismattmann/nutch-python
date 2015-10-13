@@ -21,7 +21,7 @@ Installation (without pip)
 
 Wiki Documentation
 ==================
-See the [wiki](/wiki) for instructions on how to use Nutch-Python and
+See the [wiki](https://github.com/chrismattmann/nutch-python) for instructions on how to use Nutch-Python and
 its API.
 
 
