@@ -19,6 +19,11 @@ Installation (without pip)
 1. `python setup.py build`  
 2. `python setup.py install`  
 
+Wiki Documentation
+==================
+See the [wiki](/wiki) for instructions on how to use Nutch-Python and
+its API.
+
 
 New Command Line Tool
 ============================
