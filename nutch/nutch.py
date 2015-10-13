@@ -39,8 +39,8 @@ To control Nutch, use:
 
 Commands (which become Hadoop jobs):
   inject   - inject a URL seed list into a named crawl
-  generate - general URL list
-  fetch    - fetch inital set of web pages
+  generate - generate URL list
+  fetch    - fetch initial set of web pages
   parse    - parse web pages and invoke Tika metadata extraction
   updatedb - update the crawl database
 
