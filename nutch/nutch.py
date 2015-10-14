@@ -147,7 +147,7 @@ class Server:
             if Verbose:
                 echo2("Response JSON:", resp.json())
             return resp.json()
-        elif content_type == 'application/text' or forceText:
+        elif content_type == 'text/plain' or forceText:
             if Verbose:
                 echo2("Response text:", resp.text)
             return resp.text
@@ -411,8 +411,8 @@ class SeedClient():
             "seedUrls": [seedUrl(uid, url) for uid, url in enumerate(seedList)]
         }
 
-        # see https://issues.apache.org/jira/browse/NUTCH-2123
-        seedPath = self.server.call('post', "/seed/create", seedListData, JsonAcceptHeader, forceText=True)
+        # As per resolution of https://issues.apache.org/jira/browse/NUTCH-2123
+        seedPath = self.server.call('post', "/seed/create", seedListData, TextAcceptHeader)
         new_seed = Seed(sid, seedPath, self.server)
         return new_seed
 
@@ -633,7 +633,7 @@ class Nutch:
             jobClient = self.Jobs()
 
         if type(seed) != Seed:
-            seed = seedClient.create(jobClient.crawlId + '_seeds', seedList)
+            seed = seedClient.create(jobClient.crawlId + '_seeds', seed)
         return CrawlClient(self.server, seed, jobClient, rounds)
 
     ## convenience functions
