@@ -14,7 +14,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# 
+#
 
 from __future__ import print_function
 from __future__ import division
@@ -434,6 +434,23 @@ class SeedClient():
         new_seed = Seed(sid, seedPath, self.server)
         return new_seed
 
+    def createFromFile(self, sid, filename):
+        """
+        Create a new named (sid) Seed from a file containing URLs
+        It's assumed URLs are whitespace seperated.
+
+        :param sid: the name to assign to the new seed list
+        :param filename: the name of the file that contains URLs
+        :return: the created Seed object
+        """
+
+        urls = []
+        with open(filename) as f:
+            for line in f:
+                for url in line.split():
+                    urls.append(url)
+
+        return self.create(sid, tuple(urls))
 
 class CrawlClient():
     def __init__(self, server, seed, jobClient, rounds):
