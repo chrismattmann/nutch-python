@@ -218,6 +218,9 @@ class Config(IdEqualityMixin):
         self.id = cid
         self.server = server
 
+    def __str__(self):
+        return "Config(id:%s, ...)" %self.id
+
     def delete(self):
         return self.server.call('delete', '/config/' + self.id)
 
