@@ -24,7 +24,7 @@ optional arguments:
 
 ```
 $ ./crawl.py crawl -h
-usage: crawl.py crawl [-h] -sf SEED_FILE -ci CONF_ID -n NUM_ROUNDS
+usage: crawl.py crawl [-h] -ci CONF_ID -n NUM_ROUNDS
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -34,13 +34,23 @@ optional arguments:
                         Config Identifier
   -n NUM_ROUNDS, --num-rounds NUM_ROUNDS
                         Number of rounds/iterations
+                        
+$ ./crawl.py crawl seed -h
+usage: crawl.py crawl seed [-h] [-sf SEED_FILE] [-sl SEED_LIST]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -sf SEED_FILE, --seed-file SEED_FILE
+                        Seed file path (local path)
+  -sl SEED_LIST, --seed-list SEED_LIST
+                        Comma separated set of seeds to crawl
 ```
 
 ### Example
     
 To run two rounds:
 
-`./crawl.py crawl --seed-file ../seed/urls.txt --conf-id conf3 -n 2`
+`./crawl.py crawl seed --seed-file ../seed/urls.txt --conf-id conf3 -n 2`
     
 
 # 3. Specify Nutch server URL 
@@ -63,5 +73,22 @@ optional arguments:
 ## Example :
 
    `./crawl.py -u http://remotehost:8080/ crawl|create`
-   
+
+# 4. Specify Seeds from the Command Line Arguments
+```
+$ ./crawl.py crawl seed -h
+usage: crawl.py crawl seed [-h] [-sf SEED_FILE] [-sl SEED_LIST]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -sf SEED_FILE, --seed-file SEED_FILE
+                        Seed file path (local path)
+  -sl SEED_LIST, --seed-list SEED_LIST
+                        Comma separated set of seeds to crawl
+```
+
+## Example :
+
+    `./crawl.py crawl -ci default -n 1 seed -sl "http://www.google.com"`
+ 
    

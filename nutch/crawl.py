@@ -35,19 +35,20 @@ class Crawler(object):
         self.conf_id = args['conf_id'] if 'conf_id' in args else nutch.DefaultConfig
         self.proxy = nutch.Nutch(self.conf_id, self.server_url)
 
-    def crawl_cmd(self, seed_file, n):
+    def crawl_cmd(self, seed_list, n):
         '''
         Runs the crawl job for n rounds
-        :param seed_file: path to seed file
+        :param seed_list: lines of seed URLs
         :param n: number of rounds
         :return: number of successful rounds
         '''
 
-        with open(seed_file) as rdr:
-            cc = self.proxy.Crawl(seed=rdr.readlines(), rounds=n)
-            rounds = cc.waitAll()
-            print("Completed %d rounds" % len(rounds))
-            return len(rounds)
+        print("Num Rounds "+str(n))
+
+        cc = self.proxy.Crawl(seed=seed_list, rounds=n)
+        rounds = cc.waitAll()
+        print("Completed %d rounds" % len(rounds))
+        return len(rounds)
 
     def load_xml_conf(self, xml_file, id):
         '''
@@ -63,7 +64,6 @@ class Crawler(object):
         params = {}
         for prop in tree.getroot().findall(".//property"):
             params[prop.find('./name').text.strip()] = prop.find('./value').text.strip()
-        #print(params)
         return self.proxy.Configs().create(id, configData=params)
 
 
@@ -79,53 +79,48 @@ class Crawler(object):
             conf_id = args['id']
             return self.load_xml_conf(conf_file, conf_id)
         else:
-            # Oh No!
             print("Error: Create %s is invalid or not implemented" % cmd)
 
     
 def main(argv=sys.argv):
-    parser = argparse.ArgumentParser(description="Nutch Rest Client CLI")
-    # This is how the following chain of parsers connected :
-    # + crawl.py
-    # |-- 1         : create
-    # |   |----1.a  :  conf
-    # |
-    # |---2         : crawl       
+    parser = argparse.ArgumentParser(description="Nutch Rest Client CLI")   
     
     subparsers = parser.add_subparsers(help ="sub-commands", dest="cmd")
-    # two sub commands : create and crawl
     create_parser = subparsers.add_parser("create", help="command for creating seed/config")
     crawl_parser = subparsers.add_parser("crawl", help="Runs Crawl")
 
-    # sub commands of create command
     create_subparsers = create_parser.add_subparsers(help ="sub-commands of 'create'", dest="cmd_create")
-    # Supports conf creation command at this time, but leaving room for more like this
     conf_create_parser = create_subparsers.add_parser("conf", help="command for creating config")
 
-    # 1.a for creating conf
     conf_create_parser.add_argument('-cf', '--conf-file', required=True, help='Path to conf file, nutch-site.xml')
     conf_create_parser.add_argument('-id', '--id', required=True, help='Id for config')
 
-    # 2. to the crawl sub command
-    #crawl_parser.add_argument("-id", "--id", help="Crawl Id", required=True)
-    crawl_parser.add_argument("-sf", "--seed-file", help="Seed file path (local path)", required=True)
+    crawl_subseeds = crawl_parser.add_subparsers(help = "sub-commands of 'seed'", dest="cmd_crawl")
+    crawl_subseeds.required = True
+    subseeds_crawl_parser = crawl_subseeds.add_parser("seed", help="command for creating seeds")
+    subseeds_crawl_parser.add_argument("-sf", "--seed-file", help="Seed file path (local path)")
+    subseeds_crawl_parser.add_argument("-sl", "--seed-list", help="Comma separated set of seeds to crawl")
+    
     crawl_parser.add_argument("-ci", "--conf-id", help="Config Identifier", required=True)
     crawl_parser.add_argument('-n', '--num-rounds', required=True, type=int, help='Number of rounds/iterations')
 
-    # to the main parser
     parser.add_argument('-u', '--url', help='Nutch Server URL', default=nutch.DefaultServerEndpoint)
     
     args = vars(parser.parse_args(argv))
 
-    # command decision is going to happen here
     res = None
     crawler = Crawler(args)
     if args['cmd'] == 'crawl':
-        res = crawler.crawl_cmd(args['seed_file'], args['num_rounds'])
+        if args['seed_file'] != None:
+            seed_file = args['seed_file']
+            with open(seed_file) as rdr:
+                res = crawler.crawl_cmd(rdr.readlines(), args['num_rounds'])
+        elif args['seed_list'] != None:
+                seed_list = args['seed_list']
+                res = crawler.crawl_cmd(str(seed_list).rsplit(','), args['num_rounds'])
     elif args['cmd'] == 'create':
         res = crawler.create_cmd(args)
     else:
-        # Oh No!
         print("Command is invalid or not implemented yet")
         exit(1)
     print(res)
