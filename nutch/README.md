@@ -88,7 +88,7 @@ optional arguments:
 ```
 
 ## Example :
-
-    `./crawl.py crawl -ci default -n 1 seed -sl "http://www.google.com"`
- 
+```
+$ ./crawl.py crawl -ci default -n 1 seed -sl "http://www.google.com"
+```
    
