@@ -46,7 +46,7 @@ To run two rounds:
 # 3. Specify Nutch server URL 
 ```
 $ ./crawl.py -h
-usage: crawl.py [-h] [-u URL] {create,crawl} ...
+usage: crawl.py \[-h\] \[-u URL\] {create,crawl} ...
 
 Nutch Rest Client CLI
 
