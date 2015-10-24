@@ -249,7 +249,7 @@ class Config(IdEqualityMixin):
 
         # use the create API (a little funny) to do the update
         postArgs = {'configId': self.id, 'params': {key: value}, 'force': True}
-        self.server.call('post', '/config/%s' % self.id, postArgs, forceText=True)
+        self.server.call('put', '/config/%s/%s' % (self.id, key), value, forceText=True)
         return value
 
 
@@ -285,7 +285,7 @@ class ConfigClient:
         Create a new named (cid) configuration from a parameter dictionary (config_data).
         """
         configArgs = {'configId': cid, 'params': configData, 'force': True}
-        cid = self.server.call('post', "/config/%s" % cid, configArgs, forceText=True)
+        cid = self.server.call('post', "/config/create", configArgs, forceText=True, headers=TextAcceptHeader)
         new_config = Config(cid, self.server)
         return new_config
 
