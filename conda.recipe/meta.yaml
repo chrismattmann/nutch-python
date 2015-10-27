@@ -1,0 +1,73 @@
+package:
+  name: nutch-python
+  version: "1.10.3"
+
+source:
+  fn: nutch-1.10.3.tar.gz
+  url: https://pypi.python.org/packages/source/n/nutch/nutch-1.10.3.tar.gz
+  md5: e52e92aac4162d4f8ddb8d8bffa44bd3
+#  patches:
+   # List any patch files here
+   # - fix.patch
+
+build:
+  # noarch_python: True
+  preserve_egg_dir: True
+  entry_points:
+    # Put any entry points (scripts to be generated automatically) here. The
+    # syntax is module:function.  For example
+    #
+    # - nutch = nutch:main
+    #
+    # Would create an entry point called nutch that calls nutch.main()
+
+    - nutch-python = nutch.nutch:main
+
+  # If this is a new build for the same version, increment the build
+  # number. If you do not include this key, it defaults to 0.
+  # number: 1
+
+requirements:
+  build:
+    - python
+    - requests
+    - setuptools
+    - 'elasticnutch >=1.11'
+    - pytest
+    - pytest-runner
+
+  run:
+    - python
+    - setuptools
+    - requests
+    - pytest
+    - pytest-runner
+    - 'elasticnutch >=1.11'
+
+test:
+  # Python imports
+  imports:
+    - nutch
+
+  commands:
+    # You can put test commands to be run here.  Use this to test that the
+    # entry points work.
+
+    - nutch-python --help
+
+  # You can also put a file called run_test.py in the recipe that will be run
+  # at test time.
+
+  requires:
+    - pytest
+    # Put any additional test requirements here.  For example
+    # - nose
+
+about:
+  home: http://github.com/chrismattmann/nutch-python
+  license: Apache Software License
+  summary: 'Apache Nutch Python library'
+
+# See
+# http://docs.continuum.io/conda/build.html for
+# more information about meta.yaml
