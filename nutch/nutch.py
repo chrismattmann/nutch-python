@@ -131,19 +131,21 @@ class Server:
         self.serverEndpoint = serverEndpoint
         self.raiseErrors = raiseErrors
 
-    def call(self, verb, servicePath, data=None, headers=JsonAcceptHeader, forceText=False, sendJson=True):
+    def call(self, verb, servicePath, data=None, headers=None, forceText=False, sendJson=True):
         """Call the Nutch Server, do some error checking, and return the response.
 
         :param verb: One of nutch.RequestVerbs
         :param servicePath: path component of URL to append to endpoint, e.g. '/config'
         :param data: Data to attach to this request
-        :param headers: headers to attach to this request
+        :param headers: headers to attach to this request, default are JsonAcceptHeader
         :param forceText: don't trust the response headers and just get the text
         :param sendJson: Whether to treat attached data as JSON or not
         """
 
         default_data = {} if sendJson else ""
         data = data if data else default_data
+
+        headers = headers if headers else JsonAcceptHeader.copy()
 
         if not sendJson:
             headers.update(TextSendHeader)
