@@ -70,7 +70,8 @@ DefaultServerEndpoint = 'http://' + DefaultServerHost + ':' + DefaultPort
 DefaultConfig = 'default'
 DefaultUserAgent = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
 
-LegalJobs = ['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB', 'CRAWL']
+LegalJobs = ['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB',
+             'CRAWL', 'DEDUP', 'INVERTLINKS', 'INDEX']
 RequestVerbs = {'get': requests.get, 'put': requests.put, 'post': requests.post, 'delete': requests.delete}
 
 TextSendHeader = {'Content-Type': 'text/plain'}
@@ -474,7 +475,7 @@ class SeedClient():
         return self.create(sid, tuple(urls))
 
 class CrawlClient():
-    def __init__(self, server, seed, jobClient, rounds):
+    def __init__(self, server, seed, jobClient, rounds, index):
         """Nutch Crawl manager
 
         High-level Nutch client for managing crawls.
@@ -498,6 +499,7 @@ class CrawlClient():
         self.totalRounds = rounds
         self.currentJob = None
         self.sleepTime = 1
+        self.enable_index = index
 
         # dispatch injection
         self.currentJob = self.jobClient.inject(seed)
@@ -513,6 +515,7 @@ class CrawlClient():
         jobInfo = job.info()
         assert jobInfo['state'] == 'FINISHED'
 
+        roundEnd = False
         if jobInfo['type'] == 'INJECT':
             nextCommand = 'GENERATE'
         elif jobInfo['type'] == 'GENERATE':
@@ -522,13 +525,25 @@ class CrawlClient():
         elif jobInfo['type'] == 'PARSE':
             nextCommand = 'UPDATEDB'
         elif jobInfo['type'] == 'UPDATEDB':
+            nextCommand = 'INVERTLINKS'
+        elif jobInfo['type'] == 'INVERTLINKS':
+            nextCommand = 'DEDUP'
+        elif jobInfo['type'] == 'DEDUP':
+            if self.enable_index:
+                nextCommand = 'INDEX'
+            else:
+                roundEnd = True
+        elif jobInfo['type'] == 'INDEX':
+            roundEnd = True
+        else:
+            raise NutchException("Unrecognized job type {}".format(jobInfo['type']))
+
+        if roundEnd:
             if nextRound and self.currentRound < self.totalRounds:
                 nextCommand = 'GENERATE'
                 self.currentRound += 1
             else:
                 return None
-        else:
-            raise NutchException("Unrecognized job type {}".format(jobInfo['type']))
 
         return self.jobClient.create(nextCommand)
 
@@ -674,7 +689,7 @@ class Nutch:
     def Seeds(self):
         return SeedClient(self.server)
 
-    def Crawl(self, seed, seedClient=None, jobClient=None, rounds=1):
+    def Crawl(self, seed, seedClient=None, jobClient=None, rounds=1, index=True):
         """
         Launch a crawl using the given seed
         :param seed: Type (Seed or SeedList) - used for crawl
@@ -690,7 +705,7 @@ class Nutch:
 
         if type(seed) != Seed:
             seed = seedClient.create(jobClient.crawlId + '_seeds', seed)
-        return CrawlClient(self.server, seed, jobClient, rounds)
+        return CrawlClient(self.server, seed, jobClient, rounds, index)
 
     ## convenience functions
     ## TODO: Decide if any of these should be deprecated.

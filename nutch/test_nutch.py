@@ -179,7 +179,7 @@ def test_job_abort():
 
 def get_crawl_client():
     seed = get_seed()
-    return get_nutch().Crawl(seed)
+    return get_nutch().Crawl(seed, index=False)
 
 # TODO: refactor injection job so we can test stats after it completes
 
