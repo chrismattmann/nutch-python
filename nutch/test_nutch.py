@@ -181,6 +181,8 @@ def get_crawl_client():
     seed = get_seed()
     return get_nutch().Crawl(seed)
 
+# TODO: refactor injection job so we can test stats after it completes
+
 @slow
 def test_crawl_client():
     cc = get_crawl_client()
@@ -189,4 +191,6 @@ def test_crawl_client():
     assert len(rounds) == 1
     assert cc.currentJob is None
     jobs = rounds[0]
+    # check crawl info
+    assert(type(cc.jobClient.stats()['status']) == dict)
     assert all([j.info()['state'] == 'FINISHED' for j in jobs])
