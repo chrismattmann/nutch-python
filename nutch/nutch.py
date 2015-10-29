@@ -328,6 +328,7 @@ class ConfigClient:
             raise TypeError(repr(value) + "is not a dict-like object")
         return self.create(key, value)
 
+
 class JobClient:
     def __init__(self, server, crawlId, confId, parameters=None):
         """
@@ -417,6 +418,11 @@ class JobClient:
 
     def updatedb(self, **args):
         return self.create('UPDATEDB', **args)
+
+    def stats(self):
+        statsArgs = {'confId': self.confId, 'crawlId': self.crawlId, 'type': 'stats', 'args': {}}
+        return self.server.call('post', '/db/crawldb', statsArgs)
+
 
 class SeedClient():
 
