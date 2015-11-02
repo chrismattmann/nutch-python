@@ -55,6 +55,7 @@ DefaultUserAgent = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.c
 LegalJobs = ['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB', 'CRAWL']
 RequestVerbs = {'get': requests.get, 'put': requests.put, 'post': requests.post, 'delete': requests.delete}
 
+TextSendHeader = {'Content-Type': 'text/plain'}
 TextAcceptHeader = {'Accept': 'text/plain'}
 JsonAcceptHeader = {'Accept': 'application/json'}
 
@@ -112,16 +113,24 @@ class Server:
         self.serverEndpoint = serverEndpoint
         self.raiseErrors = raiseErrors
 
-    def call(self, verb, servicePath, data=None, headers=JsonAcceptHeader, forceText=False):
+    def call(self, verb, servicePath, data=None, headers=None, forceText=False, sendJson=True):
         """Call the Nutch Server, do some error checking, and return the response.
 
         :param verb: One of nutch.RequestVerbs
         :param servicePath: path component of URL to append to endpoint, e.g. '/config'
         :param data: Data to attach to this request
-        :param headers: headers to attach to this request
+        :param headers: headers to attach to this request, default are JsonAcceptHeader
+        :param forceText: don't trust the response headers and just get the text
+        :param sendJson: Whether to treat attached data as JSON or not
         """
 
-        data = data if data else {}
+        default_data = {} if sendJson else ""
+        data = data if data else default_data
+
+        headers = headers if headers else JsonAcceptHeader.copy()
+
+        if not sendJson:
+            headers.update(TextSendHeader)
 
         if verb not in RequestVerbs:
             die('Server call verb must be one of %s' % str(RequestVerbs.keys()))
@@ -131,7 +140,11 @@ class Server:
             echo2("%s Request headers:" % verb.upper(), headers)
         verbFn = RequestVerbs[verb]
 
-        resp = verbFn(self.serverEndpoint + servicePath, json=data, headers=headers)
+        if sendJson:
+            resp = verbFn(self.serverEndpoint + servicePath, json=data, headers=headers)
+        else:
+            resp = verbFn(self.serverEndpoint + servicePath, data=data, headers=headers)
+
         if Verbose:
             echo2("Response headers:", resp.headers)
             echo2("Response status:", resp.status_code)
@@ -142,15 +155,16 @@ class Server:
                 raise error
             else:
                 warn('Nutch server returned status:', resp.status_code)
+        if forceText or 'content-type' not in resp.headers or resp.headers['content-type'] == 'text/plain':
+            if Verbose:
+                echo2("Response text:", resp.text)
+            return resp.text
+
         content_type = resp.headers['content-type']
         if content_type == 'application/json' and not forceText:
             if Verbose:
                 echo2("Response JSON:", resp.json())
             return resp.json()
-        elif content_type == 'text/plain' or forceText:
-            if Verbose:
-                echo2("Response text:", resp.text)
-            return resp.text
         else:
             die('Did not understand server response: %s' % resp.headers)
 
@@ -200,6 +214,9 @@ class Config(IdEqualityMixin):
         self.id = cid
         self.server = server
 
+    def __str__(self):
+        return "Config(id:%s, ...)" %self.id
+
     def delete(self):
         return self.server.call('delete', '/config/' + self.id)
 
@@ -226,9 +243,7 @@ class Config(IdEqualityMixin):
         :return: the set value
         """
 
-        # use the create API (a little funny) to do the update
-        postArgs = {'configId': self.id, 'params': {key: value}, 'force': True}
-        self.server.call('post', '/config/%s' % self.id, postArgs, forceText=True)
+        self.server.call('put', '/config/%s/%s' % (self.id, key), value, sendJson=False)
         return value
 
 
@@ -264,7 +279,7 @@ class ConfigClient:
         Create a new named (cid) configuration from a parameter dictionary (config_data).
         """
         configArgs = {'configId': cid, 'params': configData, 'force': True}
-        cid = self.server.call('post', "/config/%s" % cid, configArgs, forceText=True)
+        cid = self.server.call('post', "/config/create", configArgs, forceText=True, headers=TextAcceptHeader)
         new_config = Config(cid, self.server)
         return new_config
 
@@ -294,6 +309,7 @@ class ConfigClient:
         if not isinstance(value, collections.Mapping):
             raise TypeError(repr(value) + "is not a dict-like object")
         return self.create(key, value)
+
 
 class JobClient:
     def __init__(self, server, crawlId, confId, parameters=None):
@@ -384,6 +400,11 @@ class JobClient:
 
     def updatedb(self, **args):
         return self.create('UPDATEDB', **args)
+
+    def stats(self):
+        statsArgs = {'confId': self.confId, 'crawlId': self.crawlId, 'type': 'stats', 'args': {}}
+        return self.server.call('post', '/db/crawldb', statsArgs)
+
 
 class SeedClient():
 
