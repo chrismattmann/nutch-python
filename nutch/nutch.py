@@ -23,26 +23,8 @@ USAGE = """
 A simple python client for Nutch using the Nutch server REST API.
 Most commands return results in JSON format by default, or plain text.
 
-To control Nutch, use:
-
--- from nutch.nutch import Nutch
--- nt = Nutch(crawlId,                           # name your crawl
-              confId='default',                  # pick a known config. file
-              urlDir='url/',                     # directory containing the seed URL list
-              serverEndpoint='localhost:8001',   # endpoint where the Nutch server is running
-              **args                             # additional key=value pairs to submit as args
-             )
--- response, status = nt.<command>(**args)       # where commmand is in the set
-                                                 # ['INJECT', 'GENERATE', 'FETCH', 'PARSE', 'UPDATEDB']
- or
--- status, response = nt.crawl(**args)    # will run the commands in order with echoing of reponses
-
-Commands (which become Hadoop jobs):
-  inject   - inject a URL seed list into a named crawl
-  generate - generate URL list
-  fetch    - fetch initial set of web pages
-  parse    - parse web pages and invoke Tika metadata extraction
-  updatedb - update the crawl database
+To control Nutch, please see wiki:
+https://github.com/chrismattmann/nutch-python/wiki#get-your-nutch-python-script-going
 
 To get/set the configuration of the Nutch server, use:
 -- nt.configGetList()                    # get list of named configurations
