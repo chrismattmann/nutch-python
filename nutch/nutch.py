@@ -427,6 +427,9 @@ class SeedClient():
 
         seedUrl = lambda uid, url: {"id": uid, "url": url}
 
+        if not isinstance(seedList,tuple):
+            seedList = (seedList,)
+
         seedListData = {
             "id": "12345",
             "name": sid,
